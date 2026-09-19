@@ -27,6 +27,11 @@ These instructions are layered.
 
 ### Principles
 
+- **Temporary files live in `repo/tmp/`.** Write scratch files, logs, caches, and test artifacts to `<repo>/tmp/` only, never to a system temp directory or the global `.tmp/`. This overrides the global rule that writes temporary files to `.tmp/`. Keep `repo/tmp/` out of git; clean it up when the task is done.
+- **No hardcoded values.** Resolve paths, ports, names, and parameters from environment, config, or API data. Do not embed literal values that can vary by machine or runtime.
+- **No explanatory code.** Skip comments and scaffolding that merely restate what the code says. Name things so the code explains itself. Reserve comments for why a non-obvious decision was made.
+- **Fix the root cause, not the symptom.** Before writing fallback or patch logic, check whether the underlying logic is wrong. If it is, fix that instead of layering workarounds.
+
 - **State is separated from runtime.** `AppState` is pure data, testable without PTYs or async. `PaneState` is separate from `PaneRuntime`. Workspace logic doesn't need real terminals.
 - **Render is pure.** `compute_view()` handles geometry and mutations. `render()` takes `&AppState` and only draws. Never mutate state during render.
 - **No god objects.** If a module is doing too many things, split it. `app/` is already split into state, actions, and input. Keep it that way.

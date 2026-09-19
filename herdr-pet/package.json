@@ -1,0 +1,14 @@
+{
+  "name": "herdr-pet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop pet companion for Herdr agents",
+  "scripts": {
+    "start": "tauri dev",
+    "build": "tauri build",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Herdr Pet</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="bubble" role="status" aria-live="polite">
+      <div id="bubble-content"></div>
+    </div>
+    <canvas id="pet" width="50" height="45" aria-label="Herdr pet"></canvas>
+    <span id="offline">offline</span>
+    <div id="context-menu" role="menu">
+      <div class="menu-label">皮肤</div>
+      <button type="button" role="menuitemradio" aria-checked="true">✓ 经典像素</button>
+      <div class="menu-separator"></div>
+      <button id="quit" type="button" role="menuitem">退出</button>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>
