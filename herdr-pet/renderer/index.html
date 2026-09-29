@@ -11,17 +11,15 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="bubble" role="status" aria-live="polite">
+    <div id="bubble" role="region" aria-label="Herdr agent 状态与消息">
       <div id="bubble-content"></div>
     </div>
     <canvas id="pet" width="50" height="45" aria-label="Herdr pet"></canvas>
+    <span id="attention-count" class="hidden" aria-label="需要处理的 agent 数量"></span>
     <span id="offline">offline</span>
-    <div id="context-menu" role="menu">
-      <div class="menu-label">皮肤</div>
-      <button type="button" role="menuitemradio" aria-checked="true">✓ 经典像素</button>
-      <div class="menu-separator"></div>
-      <button id="quit" type="button" role="menuitem">退出</button>
-    </div>
+    <script src="i18n.js"></script>
+    <script src="theme.js"></script>
+    <script src="prompt-state.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>
