@@ -35,6 +35,7 @@ mod state;
 mod terminal_geometry;
 mod terminal_sessions;
 mod terminal_setup;
+mod theme;
 mod timer;
 mod transport;
 
@@ -78,6 +79,47 @@ fn refresh_host_mouse_capture(enabled: bool, sgr_pixels: bool) {
     if let Err(err) = set_mouse_capture(enabled, sgr_pixels) {
         warn!(err = %err, "failed to re-assert host mouse capture");
     }
+}
+
+fn client_activation_reason(
+    result: crate::platform::HostWindowActivationResult,
+) -> crate::api::schema::ClientActivationReason {
+    use crate::api::schema::ClientActivationReason;
+    use crate::platform::HostWindowActivationResult;
+
+    match result {
+        HostWindowActivationResult::Activated => ClientActivationReason::Activated,
+        HostWindowActivationResult::UnsupportedTerminal => {
+            ClientActivationReason::UnsupportedTerminal
+        }
+        HostWindowActivationResult::PermissionDenied => ClientActivationReason::PermissionDenied,
+        HostWindowActivationResult::TerminalNotFound => ClientActivationReason::TerminalNotFound,
+        HostWindowActivationResult::TimedOut => ClientActivationReason::TimedOut,
+        HostWindowActivationResult::Failed => ClientActivationReason::Failed,
+    }
+}
+
+fn send_host_window_activation_result(
+    write_stream: &mut endpoint::EndpointRegistry,
+    endpoint_id: &endpoint::ClientEndpointId,
+    request_id: String,
+    reason: crate::api::schema::ClientActivationReason,
+) {
+    let result = crate::protocol::endpoint::EndpointHostWindowActivationResult {
+        request_id,
+        activated: reason == crate::api::schema::ClientActivationReason::Activated,
+        reason,
+    };
+    let Ok(data) = serde_json::to_string(&result) else {
+        return;
+    };
+    let _ = write_stream.send_to(
+        endpoint_id,
+        &ClientMessage::EndpointControl {
+            kind: crate::protocol::endpoint::HOST_WINDOW_ACTIVATE_RESULT_KIND.into(),
+            data,
+        },
+    );
 }
 #[cfg(windows)]
 use terminal_setup::{
@@ -416,6 +458,8 @@ async fn run_client_loop(
         presentation_frozen: false,
         draw_host_cursor,
         detached_process_children: Vec::new(),
+        host_window_title: None,
+        host_window_activation_pending: false,
         shell: config.shell_config.map(shell::ClientShellState::new),
     };
     let mut federated = endpoint_catalog.has_enabled_ssh();
@@ -1790,10 +1834,13 @@ async fn run_client_loop(
                         let _ = io::stdout().flush();
                     }
                     ServerMessage::WindowTitle { title } => {
-                        let _ = crate::terminal_effects::write_window_title(
-                            &mut io::stdout(),
-                            title.as_deref(),
-                        );
+                        state.host_window_title = title;
+                        if !state.host_window_activation_pending {
+                            let _ = crate::terminal_effects::write_window_title(
+                                &mut io::stdout(),
+                                state.host_window_title.as_deref(),
+                            );
+                        }
                     }
                     ServerMessage::ReloadSoundConfig => apply_reload(
                         &mut state,
@@ -1878,6 +1925,93 @@ async fn run_client_loop(
                         }
                         let snapshot = match endpoint::decode_endpoint_control(&kind, &data) {
                             Ok(endpoint::EndpointControlMessage::HealthPong) => continue,
+                            Ok(endpoint::EndpointControlMessage::ThemeRead(request)) => {
+                                let host = theme::observed_theme(&state.host_theme_updates);
+                                let result = crate::protocol::endpoint::EndpointClientThemeResult {
+                                    request_id: request.request_id,
+                                    theme: state
+                                        .shell
+                                        .as_ref()
+                                        .map(|shell| shell.client_theme(&host)),
+                                };
+                                if let Ok(data) = serde_json::to_string(&result) {
+                                    let _ = write_stream.send_to(
+                                        &endpoint_id,
+                                        &ClientMessage::EndpointControl {
+                                            kind:
+                                                crate::protocol::endpoint::CLIENT_THEME_RESULT_KIND
+                                                    .into(),
+                                            data,
+                                        },
+                                    );
+                                }
+                                continue;
+                            }
+                            Ok(endpoint::EndpointControlMessage::HostWindowActivation(request)) => {
+                                let unavailable = !endpoint_active || state.presentation_frozen;
+                                if unavailable {
+                                    send_host_window_activation_result(
+                                        &mut write_stream,
+                                        &endpoint_id,
+                                        request.request_id,
+                                        crate::api::schema::ClientActivationReason::ClientUnavailable,
+                                    );
+                                    continue;
+                                }
+                                if state.host_window_activation_pending {
+                                    send_host_window_activation_result(
+                                        &mut write_stream,
+                                        &endpoint_id,
+                                        request.request_id,
+                                        crate::api::schema::ClientActivationReason::Busy,
+                                    );
+                                    continue;
+                                }
+                                if !crate::platform::host_window_activation_supported() {
+                                    send_host_window_activation_result(
+                                        &mut write_stream,
+                                        &endpoint_id,
+                                        request.request_id,
+                                        crate::api::schema::ClientActivationReason::UnsupportedTerminal,
+                                    );
+                                    continue;
+                                }
+                                let marker = format!(
+                                    "herdr-activate-{}-{}",
+                                    std::process::id(),
+                                    request.request_id
+                                );
+                                let marker_written = crate::terminal_effects::write_window_title(
+                                    &mut io::stdout(),
+                                    Some(&marker),
+                                )
+                                .and_then(|_| io::stdout().flush())
+                                .is_ok();
+                                if !marker_written {
+                                    send_host_window_activation_result(
+                                        &mut write_stream,
+                                        &endpoint_id,
+                                        request.request_id,
+                                        crate::api::schema::ClientActivationReason::Failed,
+                                    );
+                                    continue;
+                                }
+                                state.host_window_activation_pending = true;
+                                let activation_tx = event_tx.clone();
+                                let activation_endpoint_id = endpoint_id.clone();
+                                std::thread::spawn(move || {
+                                    let result = crate::platform::activate_host_terminal(&marker);
+                                    let _ = activation_tx.blocking_send(
+                                        ClientLoopEvent::HostWindowActivationCompleted {
+                                            endpoint_id: activation_endpoint_id,
+                                            generation,
+                                            request_id: request.request_id,
+                                            result,
+                                        },
+                                    );
+                                });
+                                continue;
+                            }
                             Ok(endpoint::EndpointControlMessage::AgentViewProjection(
                                 projection,
                             )) => {
@@ -1981,6 +2115,30 @@ async fn run_client_loop(
                     ServerMessage::Welcome { .. } => {
                         debug!("received unexpected Welcome in main loop");
                     }
+                }
+            }
+            ClientLoopEvent::HostWindowActivationCompleted {
+                endpoint_id,
+                generation,
+                request_id,
+                result,
+            } => {
+                state.host_window_activation_pending = false;
+                let mut stdout = io::stdout();
+                // state.host_window_title always holds the newest server title,
+                // including any title that arrived while the marker was up.
+                let _ = crate::terminal_effects::write_window_title(
+                    &mut stdout,
+                    state.host_window_title.as_deref(),
+                );
+                let _ = stdout.flush();
+                if write_stream.accepts(&endpoint_id, generation) {
+                    send_host_window_activation_result(
+                        &mut write_stream,
+                        &endpoint_id,
+                        request_id,
+                        client_activation_reason(result),
+                    );
                 }
             }
             ClientLoopEvent::ServerDisconnected {

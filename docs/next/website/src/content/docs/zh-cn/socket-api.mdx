@@ -94,7 +94,7 @@ herdr pane read w1:p2 --source recent --lines 50
 | --- | --- |
 | 服务器 | `ping`、`server.stop`、`server.reload_config`、`server.agent_manifests`、`server.reload_agent_manifests` |
 | 通知 | `notification.show` |
-| 客户端 | `client.window_title.set`、`client.window_title.clear` |
+| 客户端 | `client.window_title.set`、`client.window_title.clear`、`client.activate`、`client.theme.get` |
 | 会话 | `session.snapshot` |
 | 工作区 | `workspace.create`、`workspace.list`、`workspace.get`、`workspace.focus`、`workspace.rename`、`workspace.move`、`workspace.move_block`、`workspace.report_metadata`、`workspace.close` |
 | Worktree | `worktree.list`、`worktree.create`、`worktree.open`、`worktree.remove` |
@@ -274,6 +274,16 @@ herdr notification show "build failed" --body "api workspace" --position top-lef
 ```
 
 `client.window_title.clear` 把标题交还给 `ui.window_title`。响应是 `type: "client_window_title"`,带 `changed` 和 `set`、`cleared` 或 `no_foreground_client` 之一的 reason。
+
+用 `{"id":"req_theme","method":"client.theme.get","params":{}}` 读取前台客户端当前生效的界面主题。`client_theme` 响应包含 `theme: {name, colors}`。`colors` 包含 `background`、`text`、`accent`、`muted`、`border`、`surface`、`selection`、`working`、`blocked`、`done`、`unknown`，值是 `#rrggbb` 或尚未观测到终端颜色时的 `null`。配色包含自定义覆盖和当前明暗选择。没有兼容的前台客户端、连接断开或等待五秒超时会返回 `theme: null`，不会断开其他客户端；旧服务器可能拒绝这个可选方法。调用方应对不可用颜色使用自身默认值。读取不会修改主题。
+
+请求前台 Herdr 客户端将承载它的终端窗口显示到最前方：
+
+```json
+{"id":"req_activate","method":"client.activate","params":{}}
+```
+
+`client_activation` 响应包含 `activated` 和 reason。reason 可以是 `activated`、`no_foreground_client`、`client_unavailable`、`unsupported_terminal`、`permission_denied`、`terminal_not_found`、`busy`、`timed_out` 或 `failed`。首个实现支持在 macOS Ghostty 中直接运行的 Herdr。macOS 可能要求授予 Herdr 控制 Ghostty 的自动化权限。`tmux` 和 GNU Screen 中的会话无法可靠对应到一个 Ghostty 窗口，因此会返回不支持。
 
 Worktree 方法把 Git 检出作为 Herdr 工作区管理。`worktree.create` 创建检出,并返回新的 `workspace`、`tab`、`root_pane` 和 `worktree` 记录。请求的分支已在本地存在时检出它;否则从请求的 base 或 `HEAD` 创建分支。`worktree.open` 打开已有检出,或返回已打开的工作区。`worktree.remove` 对关联的子工作区运行 `git worktree remove`,从不删除分支。
 

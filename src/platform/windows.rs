@@ -16,6 +16,14 @@ use std::{
 mod clipboard_image;
 mod config_backup;
 
+pub(crate) fn host_window_activation_supported() -> bool {
+    false
+}
+
+pub(crate) fn activate_host_terminal(_marker: &str) -> super::HostWindowActivationResult {
+    super::HostWindowActivationResult::UnsupportedTerminal
+}
+
 pub(crate) fn classify_child_exit(status: &portable_pty::ExitStatus) -> super::ChildExitReason {
     // STATUS_CONTROL_C_EXIT is reported without a Unix signal by portable-pty.
     if status.exit_code() == 0xC000013A {

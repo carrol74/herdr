@@ -1004,6 +1004,21 @@ impl App {
                     },
                 );
             }
+            Method::ClientActivate(_) => {
+                return responses::encode_success(
+                    request.id,
+                    ResponseResult::ClientActivation {
+                        activated: false,
+                        reason: crate::api::schema::ClientActivationReason::NoForegroundClient,
+                    },
+                );
+            }
+            Method::ClientThemeGet(_) => {
+                return responses::encode_success(
+                    request.id,
+                    ResponseResult::ClientTheme { theme: None },
+                );
+            }
             Method::SessionSnapshot(_) => return self.handle_session_snapshot(request.id),
             Method::WorkspaceList(_) => return self.handle_workspace_list(request.id),
             Method::WorkspaceGet(target) => return self.handle_workspace_get(request.id, target),

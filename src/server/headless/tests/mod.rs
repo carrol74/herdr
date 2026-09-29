@@ -1,5 +1,7 @@
 use super::*;
 
+#[path = "client_theme.rs"]
+mod client_theme_tests;
 #[path = "pane_graphics.rs"]
 mod pane_graphics_tests;
 #[path = "surface_interest.rs"]
@@ -77,6 +79,10 @@ fn test_headless_server_with_event_hub(event_hub: api::EventHub) -> HeadlessServ
         #[cfg(unix)]
         next_client_id: 1,
         foreground_client_id: None,
+        pending_client_activation: None,
+        next_client_activation_id: 1,
+        pending_theme_reads: HashMap::new(),
+        next_theme_read_id: 1,
         tab_geometry_controllers: HashMap::new(),
         popup_owner_tab_id: None,
         client_shell_boot_id: "test-boot".into(),

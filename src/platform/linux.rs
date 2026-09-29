@@ -14,6 +14,14 @@ use super::{
     LimitedRead, Signal,
 };
 
+pub(crate) fn host_window_activation_supported() -> bool {
+    false
+}
+
+pub(crate) fn activate_host_terminal(_marker: &str) -> super::HostWindowActivationResult {
+    super::HostWindowActivationResult::UnsupportedTerminal
+}
+
 pub(crate) use super::unix_common::{
     configure_status_command, create_remote_private_dir, create_remote_ssh_config_dir,
     create_remote_ssh_config_file, hostname, local_datetime, remote_bridge_endpoint_path,

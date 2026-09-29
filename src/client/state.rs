@@ -40,6 +40,8 @@ pub(super) struct ClientState {
     pub(super) presentation_frozen: bool,
     pub(super) draw_host_cursor: bool,
     pub(super) detached_process_children: Vec<std::process::Child>,
+    pub(super) host_window_title: Option<String>,
+    pub(super) host_window_activation_pending: bool,
     pub(super) shell: Option<shell::ClientShellState>,
 }
 
@@ -70,6 +72,17 @@ impl ClientState {
         update: &crate::protocol::ClientHostThemeUpdate,
     ) {
         use crate::protocol::ClientHostThemeUpdate;
+
+        if let ClientHostThemeUpdate::PaletteColors(incoming) = update {
+            if let Some(ClientHostThemeUpdate::PaletteColors(current)) = self
+                .host_theme_updates
+                .iter_mut()
+                .find(|current| matches!(current, ClientHostThemeUpdate::PaletteColors(_)))
+            {
+                super::theme::merge_palette_colors(current, incoming);
+                return;
+            }
+        }
 
         match update {
             ClientHostThemeUpdate::DefaultColor { kind, .. } => {

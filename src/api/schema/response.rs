@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::agents::AgentInfo;
-use super::common::{ClientWindowTitleReason, NotificationShowReason};
+use super::common::{ClientActivationReason, ClientWindowTitleReason, NotificationShowReason};
 use super::events::EventEnvelope;
 use super::integrations::{
     IntegrationInstallResult, IntegrationTarget, IntegrationUninstallResult,
@@ -42,6 +42,9 @@ pub struct ErrorBody {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ResponseResult {
+    ClientTheme {
+        theme: Option<super::theme::ClientTheme>,
+    },
     Pong {
         version: String,
         protocol: u32,
@@ -228,6 +231,10 @@ pub enum ResponseResult {
     ClientWindowTitle {
         changed: bool,
         reason: ClientWindowTitleReason,
+    },
+    ClientActivation {
+        activated: bool,
+        reason: ClientActivationReason,
     },
     IntegrationList {
         integrations: Vec<super::integrations::IntegrationInfo>,

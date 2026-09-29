@@ -1,5 +1,24 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+impl ClientShellState {
+    pub(crate) fn client_theme(
+        &self,
+        host: &crate::terminal_theme::TerminalTheme,
+    ) -> crate::api::schema::ClientTheme {
+        let name = if self.config.theme_runtime.auto_switch {
+            match self.host_appearance {
+                Some(crate::terminal_theme::HostAppearance::Light) => {
+                    &self.config.theme_runtime.light_name
+                }
+                _ => &self.config.theme_runtime.dark_name,
+            }
+        } else {
+            &self.config.theme_name
+        };
+        super::theme::snapshot(name, &self.config.palette, host)
+    }
+}
+
 mod actions;
 mod agent_sidebar;
 mod aggregate_navigation;

@@ -396,6 +396,8 @@ pub(crate) fn api_method_name(method: &Method) -> &'static str {
         Method::CommandInvoke(_) => "command.invoke",
         Method::ClientWindowTitleSet(_) => "client.window_title.set",
         Method::ClientWindowTitleClear(_) => "client.window_title.clear",
+        Method::ClientActivate(_) => "client.activate",
+        Method::ClientThemeGet(_) => "client.theme.get",
         Method::ClientShellSurfaceSet(_) => "client_shell.surface.set",
         Method::SessionSnapshot(_) => "session.snapshot",
         Method::WorkspaceCreate(_) => "workspace.create",

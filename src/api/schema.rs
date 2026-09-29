@@ -11,6 +11,7 @@ pub mod response;
 pub mod server;
 pub mod session;
 pub mod tabs;
+pub mod theme;
 pub mod workspaces;
 pub mod worktrees;
 
@@ -25,6 +26,7 @@ pub use response::*;
 pub use server::*;
 pub use session::*;
 pub use tabs::*;
+pub use theme::*;
 pub use workspaces::*;
 pub use worktrees::*;
 
@@ -69,6 +71,10 @@ pub enum Method {
     ClientWindowTitleSet(ClientWindowTitleSetParams),
     #[serde(rename = "client.window_title.clear")]
     ClientWindowTitleClear(EmptyParams),
+    #[serde(rename = "client.activate")]
+    ClientActivate(EmptyParams),
+    #[serde(rename = "client.theme.get")]
+    ClientThemeGet(EmptyParams),
     #[serde(rename = "client_shell.surface.set")]
     ClientShellSurfaceSet(ClientShellSurfaceSetParams),
     #[serde(rename = "session.snapshot")]

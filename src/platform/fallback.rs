@@ -3,6 +3,14 @@ use std::process::Command;
 
 use super::{ClipboardImage, ForegroundJob, Signal};
 
+pub(crate) fn host_window_activation_supported() -> bool {
+    false
+}
+
+pub(crate) fn activate_host_terminal(_marker: &str) -> super::HostWindowActivationResult {
+    super::HostWindowActivationResult::UnsupportedTerminal
+}
+
 #[cfg(unix)]
 pub(crate) use super::unix_common::set_default_plugin_pane_pwd;
 

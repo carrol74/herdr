@@ -376,6 +376,13 @@ impl ClientWriterQueue {
 /// Internal event sent from client transport threads to the main event loop.
 #[derive(Debug)]
 pub(crate) enum ServerEvent {
+    ClientThemeReadCapability {
+        client_id: u64,
+    },
+    ClientThemeResult {
+        client_id: u64,
+        data: String,
+    },
     /// A new client completed the handshake.
     ClientConnected {
         client_id: u64,
@@ -402,7 +409,10 @@ pub(crate) enum ServerEvent {
         writer: ClientWriter,
     },
     /// A client sent an input message.
-    ClientInput { client_id: u64, data: Vec<u8> },
+    ClientInput {
+        client_id: u64,
+        data: Vec<u8>,
+    },
     /// A client reported the one armed Kitty regular-file response.
     GraphicsTransmissionResult {
         client_id: u64,
@@ -435,7 +445,10 @@ pub(crate) enum ServerEvent {
         takeover: bool,
     },
     /// A client requested read-only observation of one terminal.
-    ClientObserveTerminal { client_id: u64, target: String },
+    ClientObserveTerminal {
+        client_id: u64,
+        target: String,
+    },
     /// A client requested writable control of one terminal.
     ClientControlTerminal {
         client_id: u64,
@@ -497,11 +510,24 @@ pub(crate) enum ServerEvent {
         update: crate::protocol::ClientHostThemeUpdate,
     },
     /// A client-owned shell reported whether its outer terminal has focus.
-    ClientShellFocus { client_id: u64, focused: bool },
+    ClientShellFocus {
+        client_id: u64,
+        focused: bool,
+    },
     /// A client-owned shell updated its local mouse-capture preference.
-    ClientShellMouseCapture { client_id: u64, enabled: bool },
+    ClientShellMouseCapture {
+        client_id: u64,
+        enabled: bool,
+    },
     /// The committed shell asks the server to replay presentation effects before input resumes.
-    ClientShellPresentationSync { client_id: u64, token: String },
+    ClientShellPresentationSync {
+        client_id: u64,
+        token: String,
+    },
+    ClientHostWindowActivationResult {
+        client_id: u64,
+        data: String,
+    },
     /// A client-owned shell invoked one endpoint operation through this connection.
     ClientShellEndpointRequest {
         client_id: u64,
@@ -525,11 +551,17 @@ pub(crate) enum ServerEvent {
         data: Vec<u8>,
     },
     /// A client detached gracefully.
-    ClientDetach { client_id: u64 },
+    ClientDetach {
+        client_id: u64,
+    },
     /// A client connection was lost.
-    ClientDisconnected { client_id: u64 },
+    ClientDisconnected {
+        client_id: u64,
+    },
     /// A client writer drained its render slot and can accept another render.
-    ClientWriterDrained { client_id: u64 },
+    ClientWriterDrained {
+        client_id: u64,
+    },
     /// Ctrl+C or external shutdown signal received.
     QuitSignal,
 }
@@ -685,6 +717,7 @@ pub(crate) fn handle_client_handshake(
         }
     };
 
+    let mut theme_read = false;
     let (
         client_cols,
         client_rows,
@@ -727,6 +760,7 @@ pub(crate) fn handle_client_handshake(
                     return Ok(());
                 }
             };
+            theme_read = hello.theme_read;
             let incompatibility = if hello.generation != ENDPOINT_PROTOCOL_GENERATION {
                 Some((
                     "unsupported_generation",
@@ -898,6 +932,9 @@ pub(crate) fn handle_client_handshake(
     }
 
     // Enter read loop — read client messages and forward to main loop.
+    if theme_read {
+        let _ = server_event_tx.blocking_send(ServerEvent::ClientThemeReadCapability { client_id });
+    }
     client_read_loop_with_endpoint_controls(
         stream,
         client_id,
@@ -1320,6 +1357,16 @@ fn client_read_loop_with_endpoint_controls(
                     token: data,
                 }
             }
+            ClientMessage::EndpointControl { kind, data }
+                if kind == crate::protocol::endpoint::CLIENT_THEME_RESULT_KIND =>
+            {
+                ServerEvent::ClientThemeResult { client_id, data }
+            }
+            ClientMessage::EndpointControl { kind, data }
+                if kind == crate::protocol::endpoint::HOST_WINDOW_ACTIVATE_RESULT_KIND =>
+            {
+                ServerEvent::ClientHostWindowActivationResult { client_id, data }
+            }
             ClientMessage::EndpointControl { kind, data } => {
                 let Some(response) = crate::server::client_endpoint_control::response(&kind, data)
                 else {
@@ -1449,6 +1496,7 @@ mod tests {
             mouse_capture: true,
             surface_active: true,
             surface_reuse: false,
+            theme_read: false,
             snapshot_codecs: vec![crate::protocol::endpoint::SNAPSHOT_CODEC_V1.into()],
             surface_codecs: vec![crate::protocol::endpoint::SURFACE_CODEC_V1.into()],
             input_codecs: vec![crate::protocol::endpoint::INPUT_CODEC_V1.into()],

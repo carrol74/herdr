@@ -8,6 +8,8 @@ pub(crate) struct DecodedAgentViewProjection {
 
 pub(crate) enum EndpointControlMessage {
     HealthPong,
+    HostWindowActivation(crate::protocol::endpoint::EndpointHostWindowActivationRequest),
+    ThemeRead(crate::protocol::endpoint::EndpointClientThemeRequest),
     AgentViewProjection(DecodedAgentViewProjection),
     Snapshot(Box<crate::protocol::ClientShellSnapshot>),
     Ignored,
@@ -19,6 +21,17 @@ pub(crate) fn decode_endpoint_control(
 ) -> Result<EndpointControlMessage, String> {
     if kind == crate::protocol::endpoint::HEALTH_PONG_KIND {
         return Ok(EndpointControlMessage::HealthPong);
+    }
+    if kind == crate::protocol::endpoint::HOST_WINDOW_ACTIVATE_KIND {
+        let Ok(request) = serde_json::from_str(data) else {
+            return Ok(EndpointControlMessage::Ignored);
+        };
+        return Ok(EndpointControlMessage::HostWindowActivation(request));
+    }
+    if kind == crate::protocol::endpoint::CLIENT_THEME_GET_KIND {
+        return Ok(serde_json::from_str(data)
+            .map(EndpointControlMessage::ThemeRead)
+            .unwrap_or(EndpointControlMessage::Ignored));
     }
     if kind == crate::protocol::endpoint::AGENT_VIEW_PROJECTION_KIND {
         let Ok(projection): Result<crate::protocol::endpoint::EndpointAgentViewProjection, _> =
@@ -75,6 +88,22 @@ mod tests {
             decode_endpoint_control("future.optional", "not json").unwrap(),
             EndpointControlMessage::Ignored
         ));
+    }
+
+    #[test]
+    fn host_window_activation_decodes() {
+        let request = crate::protocol::endpoint::EndpointHostWindowActivationRequest {
+            request_id: "activate-7".into(),
+        };
+        let decoded = decode_endpoint_control(
+            crate::protocol::endpoint::HOST_WINDOW_ACTIVATE_KIND,
+            &serde_json::to_string(&request).unwrap(),
+        )
+        .unwrap();
+        let EndpointControlMessage::HostWindowActivation(decoded) = decoded else {
+            panic!("host window activation");
+        };
+        assert_eq!(decoded.request_id, "activate-7");
     }
 
     #[test]

@@ -131,6 +131,7 @@ impl ClientShellLocation {
 
 /// A connected client tracked by the server.
 pub(crate) struct ClientConnection {
+    pub(crate) theme_read: bool,
     /// Whether this connection owns the Herdr shell or one direct terminal stream.
     pub(crate) mode: ClientConnectionMode,
     /// The client's terminal size after clamping.
@@ -232,6 +233,7 @@ impl ClientConnection {
             direct_graphics: false,
             pixel_mouse: false,
             host_terminal_theme: crate::terminal_theme::TerminalTheme::default(),
+            theme_read: false,
             host_terminal_appearance: None,
             host_terminal_appearance_explicit: false,
             outer_terminal_focus: None,

@@ -148,6 +148,20 @@ pub enum ClientWindowTitleReason {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
+pub enum ClientActivationReason {
+    Activated,
+    NoForegroundClient,
+    ClientUnavailable,
+    UnsupportedTerminal,
+    PermissionDenied,
+    TerminalNotFound,
+    Busy,
+    TimedOut,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum PaneAgentState {
     Idle,
     Working,

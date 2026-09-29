@@ -4942,6 +4942,38 @@
         {
           "properties": {
             "method": {
+              "const": "client.activate",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "client.theme.get",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/schemas/request/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "client_shell.surface.set",
               "type": "string"
             },
@@ -6848,6 +6880,117 @@
             "unknown"
           ],
           "type": "string"
+        },
+        "ClientActivationReason": {
+          "enum": [
+            "activated",
+            "no_foreground_client",
+            "client_unavailable",
+            "unsupported_terminal",
+            "permission_denied",
+            "terminal_not_found",
+            "busy",
+            "timed_out",
+            "failed"
+          ],
+          "type": "string"
+        },
+        "ClientTheme": {
+          "properties": {
+            "colors": {
+              "$ref": "#/schemas/success_response/$defs/ClientThemeColors"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "colors"
+          ],
+          "type": "object"
+        },
+        "ClientThemeColors": {
+          "properties": {
+            "accent": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "background": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "blocked": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "border": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "done": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "muted": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "selection": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "surface": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "text": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "unknown": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "working": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
         },
         "ClientWindowTitleReason": {
           "enum": [
@@ -9236,6 +9379,28 @@
           "oneOf": [
             {
               "properties": {
+                "theme": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/schemas/success_response/$defs/ClientTheme"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": {
+                  "const": "client_theme",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
                 "capabilities": {
                   "anyOf": [
                     {
@@ -10174,6 +10339,26 @@
               "required": [
                 "type",
                 "changed",
+                "reason"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "activated": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "$ref": "#/schemas/success_response/$defs/ClientActivationReason"
+                },
+                "type": {
+                  "const": "client_activation",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "activated",
                 "reason"
               ],
               "type": "object"

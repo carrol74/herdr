@@ -23,6 +23,12 @@ pub(super) enum ClientLoopEvent {
     },
     EndpointSupervisor(endpoint::EndpointSupervisorEvent),
     EndpointCatalog(Result<Vec<endpoint::SavedSshEndpoint>, String>),
+    HostWindowActivationCompleted {
+        endpoint_id: endpoint::ClientEndpointId,
+        generation: u64,
+        request_id: String,
+        result: crate::platform::HostWindowActivationResult,
+    },
     ActivateEndpoint {
         endpoint_id: endpoint::ClientEndpointId,
         target: Option<shell::ClientEndpointFocusTarget>,

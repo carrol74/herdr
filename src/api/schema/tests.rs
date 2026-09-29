@@ -373,6 +373,33 @@ fn client_window_title_requests_round_trip() {
 }
 
 #[test]
+fn client_activate_request_and_response_round_trip() {
+    let request = Request {
+        id: "req_activate".into(),
+        method: Method::ClientActivate(EmptyParams::default()),
+    };
+    let json = serde_json::to_value(&request).unwrap();
+    assert_eq!(json["method"], "client.activate");
+    assert_eq!(serde_json::from_value::<Request>(json).unwrap(), request);
+
+    let response = SuccessResponse {
+        id: "req_activate".into(),
+        result: ResponseResult::ClientActivation {
+            activated: true,
+            reason: ClientActivationReason::Activated,
+        },
+    };
+    let json = serde_json::to_value(&response).unwrap();
+    assert_eq!(json["result"]["type"], "client_activation");
+    assert_eq!(json["result"]["activated"], true);
+    assert_eq!(json["result"]["reason"], "activated");
+    assert_eq!(
+        serde_json::from_value::<SuccessResponse>(json).unwrap(),
+        response
+    );
+}
+
+#[test]
 fn agent_view_requests_round_trip() {
     let set_json = serde_json::json!({
         "id": "view-set",

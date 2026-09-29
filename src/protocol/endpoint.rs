@@ -29,6 +29,33 @@ pub const HEALTH_PING_KIND: &str = "endpoint.health.ping.v1";
 pub const HEALTH_PONG_KIND: &str = "endpoint.health.pong.v1";
 pub const AGENT_VIEW_PROJECTION_CAPABILITY: &str = "agent_view_projection";
 pub const AGENT_VIEW_PROJECTION_KIND: &str = "endpoint.agent-view.v1";
+pub const HOST_WINDOW_ACTIVATE_KIND: &str = "endpoint.host-window.activate.v1";
+pub const HOST_WINDOW_ACTIVATE_RESULT_KIND: &str = "endpoint.host-window.activate-result.v1";
+pub const CLIENT_THEME_GET_KIND: &str = "endpoint.client-theme.get.v1";
+pub const CLIENT_THEME_RESULT_KIND: &str = "endpoint.client-theme.result.v1";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointClientThemeRequest {
+    pub request_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointClientThemeResult {
+    pub request_id: String,
+    pub theme: Option<crate::api::schema::ClientTheme>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointHostWindowActivationRequest {
+    pub request_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointHostWindowActivationResult {
+    pub request_id: String,
+    pub activated: bool,
+    pub reason: crate::api::schema::ClientActivationReason,
+}
 
 fn default_true() -> bool {
     true
@@ -49,6 +76,8 @@ pub struct EndpointClientHello {
     /// Accept the optional cell-retaining surface encoding on this connection.
     #[serde(default)]
     pub surface_reuse: bool,
+    #[serde(default)]
+    pub theme_read: bool,
     #[serde(default)]
     pub snapshot_codecs: Vec<String>,
     #[serde(default)]
@@ -186,6 +215,7 @@ mod tests {
             mouse_capture: true,
             surface_active: true,
             surface_reuse: false,
+            theme_read: false,
             snapshot_codecs: vec![SNAPSHOT_CODEC_V1.into()],
             surface_codecs: vec![SURFACE_CODEC_V1.into()],
             input_codecs: vec![INPUT_CODEC_V1.into()],
@@ -333,9 +363,11 @@ mod tests {
         let mut value = serde_json::to_value(hello()).unwrap();
         value.as_object_mut().unwrap().remove("surface_active");
         value.as_object_mut().unwrap().remove("surface_reuse");
+        value.as_object_mut().unwrap().remove("theme_read");
         let decoded: EndpointClientHello = serde_json::from_value(value).unwrap();
         assert!(decoded.surface_active);
         assert!(!decoded.surface_reuse);
+        assert!(!decoded.theme_read);
     }
 
     #[test]

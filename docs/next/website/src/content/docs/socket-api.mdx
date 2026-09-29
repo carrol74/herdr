@@ -98,7 +98,7 @@ Raw socket method names use dot notation:
 | --- | --- |
 | Server | `ping`, `server.stop`, `server.reload_config`, `server.agent_manifests`, `server.reload_agent_manifests` |
 | Notification | `notification.show` |
-| Client | `client.window_title.set`, `client.window_title.clear` |
+| Client | `client.window_title.set`, `client.window_title.clear`, `client.activate`, `client.theme.get` |
 | Session | `session.snapshot` |
 | Workspace | `workspace.create`, `workspace.list`, `workspace.get`, `workspace.focus`, `workspace.rename`, `workspace.move`, `workspace.move_block`, `workspace.report_metadata`, `workspace.close` |
 | Worktree | `worktree.list`, `worktree.create`, `worktree.open`, `worktree.remove` |
@@ -388,6 +388,32 @@ Set or clear the foreground client's outer terminal window title:
 `client.window_title.clear` hands the title back to `ui.window_title`. The response is
 `type: "client_window_title"` with `changed` and reason `set`, `cleared`, or
 `no_foreground_client`.
+
+Read the foreground client's current effective UI theme with
+`{"id":"req_theme","method":"client.theme.get","params":{}}`.
+The `client_theme` response contains `theme: {name, colors}`, where `colors`
+includes `background`, `text`, `accent`, `muted`, `border`, `surface`,
+`selection`, `working`, `blocked`, `done`, and `unknown` as `#rrggbb` strings
+or `null` when a terminal color has not been observed. The palette includes
+custom overrides and the current light/dark selection. No compatible foreground
+client, a disconnect, or a five-second timeout returns `theme: null`; this does
+not disconnect other clients. Older servers may reject the optional method.
+Consumers should retain their own defaults for unavailable colors. Reading a
+theme does not change it.
+
+Ask the foreground Herdr client to bring its host terminal window to the front:
+
+```json
+{"id":"req_activate","method":"client.activate","params":{}}
+```
+
+The `client_activation` response contains `activated` and a reason: `activated`,
+`no_foreground_client`, `client_unavailable`, `unsupported_terminal`,
+`permission_denied`, `terminal_not_found`, `busy`, `timed_out`, or `failed`.
+The initial implementation supports Herdr running directly in Ghostty on macOS.
+macOS may request Automation permission for Herdr to control Ghostty. Sessions
+inside `tmux` or GNU Screen are reported as unsupported because they cannot be
+mapped reliably to one Ghostty window.
 
 Worktree methods manage Git checkouts as Herdr workspaces. `worktree.create` creates a checkout and returns the new `workspace`, `tab`, `root_pane`, and `worktree` records. If the requested branch already exists locally, it checks out that branch; otherwise it creates the branch from the requested base or `HEAD`. `worktree.open` opens an existing checkout or returns the already-open workspace. `worktree.remove` runs `git worktree remove` against a linked child workspace and never deletes the branch.
 

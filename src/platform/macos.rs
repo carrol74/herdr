@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::fd::RawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -11,8 +11,111 @@ pub(super) const REMOTE_BRIDGE_CLOCK: libc::clockid_t = libc::CLOCK_MONOTONIC;
 
 use super::{
     read_limited_reader, ClipboardCommand, ClipboardImage, ForegroundJob, ForegroundProcess,
-    LimitedRead, Signal,
+    HostWindowActivationResult, LimitedRead, Signal,
 };
+
+const GHOSTTY_BUNDLE_IDENTIFIER: &str = "com.mitchellh.ghostty";
+const HOST_WINDOW_ACTIVATION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const GHOSTTY_ACTIVATION_SCRIPT: &str = r#"
+on run argv
+    set marker to item 1 of argv
+    tell application id "com.mitchellh.ghostty"
+        repeat 100 times
+            set matches to every terminal whose name is marker
+            if (count of matches) > 0 then
+                focus (item 1 of matches)
+                return "activated"
+            end if
+            delay 0.05
+        end repeat
+    end tell
+    return "not_found"
+end run
+"#;
+
+pub(crate) fn host_window_activation_supported() -> bool {
+    host_window_activation_supported_for(
+        detected_terminal_bundle_identifier(),
+        std::env::var_os("TMUX").is_some(),
+        std::env::var_os("STY").is_some(),
+    )
+}
+
+fn host_window_activation_supported_for(
+    bundle_identifier: Option<&str>,
+    in_tmux: bool,
+    in_screen: bool,
+) -> bool {
+    bundle_identifier == Some(GHOSTTY_BUNDLE_IDENTIFIER) && !in_tmux && !in_screen
+}
+
+pub(crate) fn activate_host_terminal(marker: &str) -> HostWindowActivationResult {
+    if !host_window_activation_supported() {
+        return HostWindowActivationResult::UnsupportedTerminal;
+    }
+    run_ghostty_activation(build_ghostty_activation_command(marker))
+}
+
+fn build_ghostty_activation_command(marker: &str) -> Command {
+    let mut command = Command::new("/usr/bin/osascript");
+    command
+        .arg("-e")
+        .arg(GHOSTTY_ACTIVATION_SCRIPT)
+        .arg(marker)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    command
+}
+
+fn run_ghostty_activation(mut command: Command) -> HostWindowActivationResult {
+    let Ok(mut child) = command.spawn() else {
+        return HostWindowActivationResult::Failed;
+    };
+    let started = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < HOST_WINDOW_ACTIVATION_TIMEOUT => {
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return HostWindowActivationResult::TimedOut;
+            }
+            Err(_) => return HostWindowActivationResult::Failed,
+        }
+    };
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    if let Some(mut output) = child.stdout.take() {
+        let _ = output.read_to_string(&mut stdout);
+    }
+    if let Some(mut output) = child.stderr.take() {
+        let _ = output.read_to_string(&mut stderr);
+    }
+    classify_ghostty_activation(status.success(), stdout.trim(), &stderr)
+}
+
+fn classify_ghostty_activation(
+    success: bool,
+    stdout: &str,
+    stderr: &str,
+) -> HostWindowActivationResult {
+    if success && stdout == "activated" {
+        HostWindowActivationResult::Activated
+    } else if success && stdout == "not_found" {
+        HostWindowActivationResult::TerminalNotFound
+    } else if stderr.contains("-1743")
+        || stderr.to_ascii_lowercase().contains("not authorized")
+        || stderr.to_ascii_lowercase().contains("not authorised")
+    {
+        HostWindowActivationResult::PermissionDenied
+    } else {
+        HostWindowActivationResult::Failed
+    }
+}
 
 pub(crate) use super::unix_common::{
     configure_status_command, create_remote_private_dir, create_remote_ssh_config_dir,
@@ -1144,6 +1247,52 @@ pub fn process_exists(pid: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ghostty_activation_requires_direct_ghostty_session() {
+        assert!(host_window_activation_supported_for(
+            Some(GHOSTTY_BUNDLE_IDENTIFIER),
+            false,
+            false
+        ));
+        assert!(!host_window_activation_supported_for(
+            Some(GHOSTTY_BUNDLE_IDENTIFIER),
+            true,
+            false
+        ));
+        assert!(!host_window_activation_supported_for(
+            Some("com.apple.Terminal"),
+            false,
+            false
+        ));
+    }
+
+    #[test]
+    fn ghostty_activation_passes_marker_as_an_argument() {
+        let command = build_ghostty_activation_command("marker with spaces");
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(args.last().map(String::as_str), Some("marker with spaces"));
+        assert!(!GHOSTTY_ACTIVATION_SCRIPT.contains("marker with spaces"));
+    }
+
+    #[test]
+    fn ghostty_activation_classifies_results() {
+        assert_eq!(
+            classify_ghostty_activation(true, "activated", ""),
+            HostWindowActivationResult::Activated
+        );
+        assert_eq!(
+            classify_ghostty_activation(true, "not_found", ""),
+            HostWindowActivationResult::TerminalNotFound
+        );
+        assert_eq!(
+            classify_ghostty_activation(false, "", "execution error: -1743"),
+            HostWindowActivationResult::PermissionDenied
+        );
+    }
 
     #[test]
     fn nofile_target_raises_low_soft_limit_to_cap_when_hard_is_unlimited() {

@@ -72,6 +72,8 @@ use crate::server::socket_paths::{
 use crate::server::terminal_attach::paste_payload_for_runtime;
 
 mod bootstrap;
+mod client_activation;
+mod client_theme;
 mod client_views;
 mod endpoint_requests;
 mod lifecycle;
@@ -222,6 +224,10 @@ pub struct HeadlessServer {
     /// Window title set through `client.window_title.set`. While present it wins
     /// over the configured `ui.window_title` until the API clears it again.
     api_window_title: Option<String>,
+    pending_client_activation: Option<client_activation::PendingClientActivation>,
+    next_client_activation_id: u64,
+    pending_theme_reads: std::collections::HashMap<String, client_theme::PendingThemeRead>,
+    next_theme_read_id: u64,
     /// Server-owned keybindings, restored when foreground clients use server mode.
     server_keybindings: crate::config::LiveKeybindConfig,
     /// Full server config warning shown to clients that use server keybindings.
@@ -363,6 +369,10 @@ impl HeadlessServer {
             ),
             sent_window_title: None,
             api_window_title: None,
+            pending_client_activation: None,
+            next_client_activation_id: 1,
+            pending_theme_reads: std::collections::HashMap::new(),
+            next_theme_read_id: 1,
             server_keybindings,
             server_config_diagnostic,
             server_config_diagnostic_without_keybindings,
@@ -618,6 +628,11 @@ impl HeadlessServer {
                 .map(|pending| pending.next_deadline())
                 .fold(next_deadline, |deadline, pending| {
                     Some(deadline.map_or(pending, |current| current.min(pending)))
+                });
+            let next_deadline = self
+                .client_activation_deadline()
+                .map_or(next_deadline, |pending| {
+                    Some(next_deadline.map_or(pending, |current| current.min(pending)))
                 });
             let event = {
                 tokio::select! {
@@ -993,6 +1008,8 @@ impl HeadlessServer {
     }
 
     fn remove_client(&mut self, client_id: u64) -> bool {
+        self.cancel_client_activation_for(client_id);
+        self.cancel_theme_reads_for(client_id);
         self.retire_direct_graphics_for_client(client_id);
         let disconnected_focus = self
             .clients
@@ -2396,6 +2413,20 @@ impl HeadlessServer {
                     },
                 )
             }
+            ServerEvent::ClientThemeReadCapability { client_id } => {
+                if let Some(client) = self.clients.get_mut(&client_id) {
+                    client.theme_read = true;
+                }
+                false
+            }
+            ServerEvent::ClientThemeResult { client_id, data } => {
+                self.finish_theme_read(client_id, &data);
+                false
+            }
+            ServerEvent::ClientHostWindowActivationResult { client_id, data } => {
+                self.finish_client_activation(client_id, &data);
+                false
+            }
             ServerEvent::ClientShellPaneInput {
                 client_id,
                 pane_id,
@@ -3005,6 +3036,14 @@ impl HeadlessServer {
         }
 
         match &msg.request.method {
+            api::schema::Method::ClientThemeGet(_) => {
+                self.start_theme_read(msg);
+                return false;
+            }
+            api::schema::Method::ClientActivate(_) => {
+                self.start_client_activation(msg);
+                return false;
+            }
             api::schema::Method::ClientWindowTitleSet(params) => {
                 let response = self.handle_client_window_title_api(
                     msg.request.id.clone(),
@@ -3330,6 +3369,9 @@ impl HeadlessServer {
     /// Similar to the former App scheduler but without terminal resize polling.
     fn handle_scheduled_tasks_headless(&mut self, now: Instant, geometry_dirty: bool) -> bool {
         let mut changed = false;
+
+        self.expire_client_activation(now);
+        self.expire_theme_reads(now);
 
         // No resize polling needed — server has no terminal.
         // Client resize messages drive size changes instead.

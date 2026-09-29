@@ -25,6 +25,16 @@ pub enum Signal {
     Kill,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HostWindowActivationResult {
+    Activated,
+    UnsupportedTerminal,
+    PermissionDenied,
+    TerminalNotFound,
+    TimedOut,
+    Failed,
+}
+
 /// Why a pane runtime ended, before application persistence policy is applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChildExitReason {
